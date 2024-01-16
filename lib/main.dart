@@ -1,4 +1,9 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'const.dart';
 
 void main() {
   runApp(const MyApp());
@@ -7,119 +12,141 @@ void main() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    return const MaterialApp(
+      home: PixabayPage(),
     );
   }
 }
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
+class PixabayPage extends StatefulWidget {
+  const PixabayPage({super.key});
+  
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<PixabayPage> createState() => _PixabayPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+class _PixabayPageState extends State<PixabayPage> {
+  List imageList = [];
+  // 非同期の関数になったため返り値にFutureがつき、さらに async　キーワードが追加
+  Future<void> fetchImages(String text) async{
+    // awaitで待つことでFutureが外れ Response　型のデータを受け取ることができました。
+    final response= await Dio().get(
+      'https://pixabay.com/api/',
+      queryParameters: {
+        'key': APIKey,
+        'q': text,
+        'image_type': 'photo',
+        'pretty': 'true',
+        'per_page': '100',
+      },
+      );
+    print(response.data);
+    imageList = response.data['hits'];
+    // 画面の再更新
+    setState(() {});
   }
+  Future<void> shareImage(String url) async{
+    // 一時保存で使用できるフォルダ情報を取得
+    // Future型なのでawaitで待つ
+    final dir = await getTemporaryDirectory();
 
+    final response = await Dio().get(
+      // previewURLは荒いので高解像度のwebformatURLから画像をダウンロード
+      url,
+      options: Options(
+        // 画像データをダウンロードするときはResponseType.bytes　を指定
+        responseType: ResponseType.bytes,
+      )
+    );
+    // フォルダの中にimage.pngという名前でファイルを作り、そこに画像データを書き込みます。
+    final imageFile = await File('${dir.path}/image.png').writeAsBytes(response.data);
+    // pathを指定するとshareできる
+    await Share.shareFiles([imageFile.path]);
+  }
+  // この関数の中の処理は初回に一回だけ実行されます
+  @override
+  void initState() {
+    super.initState();
+    // 最初に一度だけ画像データを取得します。
+    fetchImages('花');
+  }
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+        title: TextFormField(
+          decoration: const InputDecoration(
+            fillColor: Colors.white,
+            filled: true,
+          ),
+          // 文字列の入力が完了したら実行。textは用意されている変数
+          onFieldSubmitted: (text){
+            print(text);
+            fetchImages(text);
+          },
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
+      body: GridView.builder(
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            // 横に並べる個数を決める
+            crossAxisCount: 3,
+            ),
+          // itemCountには要素数を与える。
+          // Listの要素数を取得
+          itemCount: imageList.length,
+          itemBuilder: (context,index){
+            // 要素を順番に取り出す
+            Map<String, dynamic> image = imageList[index];
+            return 
+            InkWell(
+              onTap: () async{
+                shareImage(image['webformatURL']);
+                print(image['likes']);
+              },
+              child: Stack(
+                // StackFit.expandは領域いっぱいに広がる
+                //  fit: StackFit.expand,
+                children: [
+                  Image.network(
+                    image['previewURL'],
+                    fit: BoxFit.cover,
+                    ),
+                    Align(
+                      // 左上ではなく右上に表示されるようにする
+                      alignment: Alignment.bottomRight,
+                      child: Container(
+                        color: Colors.white,
+                        child: Row(
+                          // MainAxisSize.minは必要最小限のサイズに縮小
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.thumb_up_alt_outlined,
+                              size: 14,
+                            ),
+                            Text('${image['likes']}'),
+                          ],
+                        ),
+                      ),
+                    ),
+                  Container(
+                    color: Colors.white,
+                    // likes keyのvalueからいいね数を取り出す
+                    child: Text('${image['likes']}'),
+                  )
+                ],
+              ),
+            );
+          }
+         ),
     );
   }
+}
+class PixabayImage {
+  final String previewURL;
+  final int likes;
+  final String webformatURL;
+
+  PixabayImage(this.previewURL, this.likes, this.webformatURL);
 }
