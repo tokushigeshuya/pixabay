@@ -27,7 +27,7 @@ class PixabayPage extends StatefulWidget {
 }
 
 class _PixabayPageState extends State<PixabayPage> {
-  List imageList = [];
+  List<PixabayImage> PixabayImages = [];
   // 非同期の関数になったため返り値にFutureがつき、さらに async　キーワードが追加
   Future<void> fetchImages(String text) async{
     // awaitで待つことでFutureが外れ Response　型のデータを受け取ることができました。
@@ -42,16 +42,19 @@ class _PixabayPageState extends State<PixabayPage> {
       },
       );
     print(response.data);
-    imageList = response.data['hits'];
+    // この時点では要素の中身の型はMap<String, dynamic>
+    final List hits = response.data['hits'];
+    // Mapメソッドを使ってMap<string,dynamic>の型を一つ一つPixabayimage　型に変換していく
+    PixabayImages = hits.map((e) => PixabayImage.fromMap(e)).toList();
     // 画面の再更新
     setState(() {});
   }
   Future<void> shareImage(String url) async{
     // 一時保存で使用できるフォルダ情報を取得
     // Future型なのでawaitで待つ
-    final dir = await getTemporaryDirectory();
+    final dir =await getTemporaryDirectory();
 
-    final response = await Dio().get(
+    final response =await Dio().get(
       // previewURLは荒いので高解像度のwebformatURLから画像をダウンロード
       url,
       options: Options(
@@ -60,7 +63,7 @@ class _PixabayPageState extends State<PixabayPage> {
       )
     );
     // フォルダの中にimage.pngという名前でファイルを作り、そこに画像データを書き込みます。
-    final imageFile = await File('${dir.path}/image.png').writeAsBytes(response.data);
+    final imageFile =await File('${dir.path}/image.png').writeAsBytes(response.data);
     // pathを指定するとshareできる
     await Share.shareFiles([imageFile.path]);
   }
@@ -94,22 +97,21 @@ class _PixabayPageState extends State<PixabayPage> {
             ),
           // itemCountには要素数を与える。
           // Listの要素数を取得
-          itemCount: imageList.length,
+          itemCount: PixabayImages.length,
           itemBuilder: (context,index){
             // 要素を順番に取り出す
-            Map<String, dynamic> image = imageList[index];
+            final pixabayImage = PixabayImages[index];
             return 
             InkWell(
               onTap: () async{
-                shareImage(image['webformatURL']);
-                print(image['likes']);
+                shareImage(pixabayImage.webformatURL);
               },
               child: Stack(
                 // StackFit.expandは領域いっぱいに広がる
                 //  fit: StackFit.expand,
                 children: [
                   Image.network(
-                    image['previewURL'],
+                    pixabayImage.previewURL,
                     fit: BoxFit.cover,
                     ),
                     Align(
@@ -125,7 +127,7 @@ class _PixabayPageState extends State<PixabayPage> {
                               Icons.thumb_up_alt_outlined,
                               size: 14,
                             ),
-                            Text('${image['likes']}'),
+                            Text('${pixabayImage.likes}'),
                           ],
                         ),
                       ),
@@ -133,7 +135,7 @@ class _PixabayPageState extends State<PixabayPage> {
                   Container(
                     color: Colors.white,
                     // likes keyのvalueからいいね数を取り出す
-                    child: Text('${image['likes']}'),
+                    child: Text('${pixabayImage.likes}'),
                   )
                 ],
               ),
@@ -148,5 +150,17 @@ class PixabayImage {
   final int likes;
   final String webformatURL;
 
-  PixabayImage(this.previewURL, this.likes, this.webformatURL);
+  PixabayImage({
+    required this.previewURL,
+    required this.likes,
+    required this.webformatURL,
+  });
+
+  factory PixabayImage.fromMap(Map<String, dynamic> map){
+    return PixabayImage(
+      previewURL: map['previewURL'],
+      likes: map['likes'],
+      webformatURL: map['webformatURL'],
+    );
+  }
 }
